@@ -1,0 +1,36 @@
+# Dependencies / build outputs
+node_modules/
+dist/
+build/
+coverage/
+.nyc_output/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs / runtime files
+logs/
+*.log
+.run.*.log
+*.pid
+*.pid.lock
+*.seed
+
+# Temp
+tmp/
+.temp/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Misc
+report.*.json
