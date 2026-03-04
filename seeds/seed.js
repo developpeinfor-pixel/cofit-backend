@@ -9,6 +9,12 @@ const dataSource = new DataSource({
   username: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  ssl:
+    process.env.DB_SSL === 'true' ||
+    process.env.DB_SSL === '1' ||
+    process.env.NODE_ENV === 'production'
+      ? { rejectUnauthorized: false }
+      : false,
   synchronize: false,
 });
 
@@ -171,56 +177,79 @@ async function seedCompetitionAndMatches() {
     },
   ];
 
+  const matchColumnsRes = await dataSource.query(`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'matches'
+  `);
+  const hasHomeTeamText = matchColumnsRes.some((c) => c.column_name === 'home_team');
+  const hasAwayTeamText = matchColumnsRes.some((c) => c.column_name === 'away_team');
+  const hasTotalSeats = matchColumnsRes.some((c) => c.column_name === 'total_seats');
+  const hasAvailableSeats = matchColumnsRes.some((c) => c.column_name === 'available_seats');
+
   for (const m of matches) {
     if (!teamMap[m.home] || !teamMap[m.away] || !competitionId) {
       continue;
     }
 
+    const columns = [
+      'competition_id',
+      'home_team_id',
+      'away_team_id',
+      'match_date',
+      'kickoff_time',
+      'stadium',
+      'ticket_price',
+      'status',
+      'home_score',
+      'away_score',
+    ];
+    const values = [
+      competitionId,
+      teamMap[m.home],
+      teamMap[m.away],
+      m.date,
+      m.time,
+      m.stadium,
+      m.price,
+      m.status,
+      m.homeScore,
+      m.awayScore,
+    ];
+
+    if (hasHomeTeamText) {
+      columns.push('home_team');
+      values.push(m.home);
+    }
+    if (hasAwayTeamText) {
+      columns.push('away_team');
+      values.push(m.away);
+    }
+    if (hasTotalSeats) {
+      columns.push('total_seats');
+      values.push(m.totalSeats);
+    }
+    if (hasAvailableSeats) {
+      columns.push('available_seats');
+      values.push(m.availableSeats);
+    }
+
+    const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
+
     await dataSource.query(
       `
-        INSERT INTO matches (
-          competition_id,
-          home_team_id,
-          away_team_id,
-          home_team,
-          away_team,
-          match_date,
-          kickoff_time,
-          stadium,
-          ticket_price,
-          total_seats,
-          available_seats,
-          status,
-          home_score,
-          away_score
-        )
-        SELECT
-          $1::uuid, $2::uuid, $3::uuid, $4, $5, $6::date, $7::time, $8, $9::numeric, $10::int, $11::int, $12, $13::int, $14::int
+        INSERT INTO matches (${columns.join(', ')})
+        SELECT ${placeholders}
         WHERE NOT EXISTS (
           SELECT 1 FROM matches
           WHERE competition_id = $1::uuid
             AND home_team_id = $2::uuid
             AND away_team_id = $3::uuid
-            AND match_date::date = $6::date
-            AND kickoff_time = $7::time
+            AND match_date::date = $4::date
+            AND kickoff_time = $5::time
         )
       `,
-      [
-        competitionId,
-        teamMap[m.home],
-        teamMap[m.away],
-        m.home,
-        m.away,
-        m.date,
-        m.time,
-        m.stadium,
-        m.price,
-        m.totalSeats,
-        m.availableSeats,
-        m.status,
-        m.homeScore,
-        m.awayScore,
-      ],
+      values,
     );
   }
 
