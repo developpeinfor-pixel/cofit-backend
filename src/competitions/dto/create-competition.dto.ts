@@ -27,8 +27,11 @@ export class CreateCompetitionDto {
 
   @IsString()
   @IsOptional()
-  @Matches(/\.(jpe?g|png)(\?.*)?$/i, {
-    message: 'banner_url must end with .jpg, .jpeg or .png',
-  })
+  @Matches(
+    /^(data:image\/(?:jpe?g|png);base64,[A-Za-z0-9+/=]+|.*\.(jpe?g|png)(\?.*)?)$/i,
+    {
+      message: 'banner_url must be a jpg/jpeg/png url or a base64 data image',
+    },
+  )
   banner_url?: string;
 }
