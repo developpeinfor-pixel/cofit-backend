@@ -17,6 +17,7 @@ import { ProfileModule } from './profile/profile.module';
 import { HomeModule } from './home/home.module';
 import { AdminModule } from './admin/admin.module';
 import { SeasonsModule } from './seasons/seasons.module';
+import { GroupsModule } from './groups/groups.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { SeasonsModule } from './seasons/seasons.module';
     HomeModule,
     AdminModule,
     SeasonsModule,
+    GroupsModule,
     ConfigModule.forRoot({ isGlobal: true }),
 
     TypeOrmModule.forRootAsync({
