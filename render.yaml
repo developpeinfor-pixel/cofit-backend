@@ -4,13 +4,11 @@ services:
     runtime: node
     plan: free
     autoDeploy: true
-    buildCommand: npm ci && npm run build
-    startCommand: npm run migration:run && npm run start:prod
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: NODE_ENV=production npm run migration:run && NODE_ENV=production npm run start:prod
     envVars:
       - key: NODE_VERSION
         value: 20
-      - key: NODE_ENV
-        value: production
       - key: PORT
         value: 10000
       - key: DB_SSL
