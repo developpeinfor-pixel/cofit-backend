@@ -14,9 +14,11 @@ async function bootstrap() {
         .map((origin) => origin.trim())
         .filter(Boolean)
     : true;
+  const corsOriginOption =
+    Array.isArray(parsedOrigins) && parsedOrigins.length === 0 ? true : parsedOrigins;
 
   app.setGlobalPrefix('api/v1');
-  app.enableCors({ origin: parsedOrigins });
+  app.enableCors({ origin: corsOriginOption });
 
   app.useGlobalPipes(
     new ValidationPipe({
