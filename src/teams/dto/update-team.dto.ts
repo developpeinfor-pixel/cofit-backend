@@ -21,6 +21,9 @@ export class UpdateTeamDto {
 
   @IsString()
   @IsOptional()
+  @Matches(/^\s*[^,;]+(\s*[,;]\s*[^,;]+)+\s*$/, {
+    message: 'club_colors must contain at least two colors separated by comma or semicolon',
+  })
   club_colors?: string;
 
   @IsArray()

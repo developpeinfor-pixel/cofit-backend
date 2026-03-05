@@ -1,4 +1,5 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Player } from './player.entity';
 
 @Entity('teams')
 export class Team {
@@ -17,8 +18,11 @@ export class Team {
   @Column({ nullable: true })
   club_colors?: string;
 
-  @Column({ type: 'jsonb', nullable: true })
-  players?: Array<Record<string, unknown>>;
+  @OneToMany(() => Player, (player) => player.team, {
+    cascade: ['insert', 'update'],
+    eager: true,
+  })
+  players?: Player[];
 
   @Column({ type: 'jsonb', nullable: true })
   staff?: Array<Record<string, unknown>>;
