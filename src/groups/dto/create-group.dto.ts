@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ArrayMinSize, IsArray, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export class CreateGroupDto {
   @IsString()
@@ -12,4 +12,13 @@ export class CreateGroupDto {
   @IsString()
   @IsOptional()
   phase?: string;
+
+  @IsInt()
+  @Min(1)
+  team_count: number;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  team_ids: string[];
 }
