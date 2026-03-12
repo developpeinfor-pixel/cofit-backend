@@ -14,6 +14,10 @@ import { MatchStatus } from '../common/enums/match-status.enum';
 
 @Injectable()
 export class AdminService {
+  private dashboardCache:
+    | { expiresAt: number; byRole: Map<Role, Record<string, unknown>> }
+    | null = null;
+
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
@@ -32,6 +36,12 @@ export class AdminService {
   ) {}
 
   async getDashboard(actor: { userId: string; role: Role }) {
+    const now = Date.now();
+    if (this.dashboardCache && this.dashboardCache.expiresAt > now) {
+      const cached = this.dashboardCache.byRole.get(actor.role);
+      if (cached) return cached;
+    }
+
     const currentAdmin = await this.usersRepository.findOne({
       where: { id: actor.userId },
     });
@@ -61,27 +71,50 @@ export class AdminService {
       }));
     const competitionInProgress = fallbackCompetition ?? null;
 
-    const competitionMatches = competitionInProgress
-      ? await this.matchesRepository.find({
-          where: { competition_id: competitionInProgress.id },
-        })
-      : [];
-    const matchPlannedCount = competitionMatches.length;
-    const matchRemainingCount = competitionMatches.filter(
-      (match) => match.status !== MatchStatus.FINISHED,
-    ).length;
+    let matchPlannedCount = 0;
+    let matchRemainingCount = 0;
+    let competitionTeams: Team[] = [];
 
-    const teamIds = Array.from(
-      new Set(
-        competitionMatches.flatMap((match) => [match.home_team_id, match.away_team_id]),
-      ),
-    );
-    const competitionTeams = teamIds.length
-      ? await this.teamsRepository.find({
-          where: { id: In(teamIds) },
-          order: { name: 'ASC' },
-        })
-      : [];
+    if (competitionInProgress) {
+      const competitionId = competitionInProgress.id;
+      const [planned, remaining, teamIdRows] = await Promise.all([
+        this.matchesRepository.count({
+          where: { competition_id: competitionId },
+        }),
+        this.matchesRepository
+          .createQueryBuilder('match')
+          .where('match.competition_id = :competitionId', { competitionId })
+          .andWhere('match.status != :status', { status: MatchStatus.FINISHED })
+          .getCount(),
+        this.matchesRepository
+          .createQueryBuilder('match')
+          .select('match.home_team_id', 'home_team_id')
+          .addSelect('match.away_team_id', 'away_team_id')
+          .where('match.competition_id = :competitionId', { competitionId })
+          .getRawMany(),
+      ]);
+
+      matchPlannedCount = planned;
+      matchRemainingCount = remaining;
+
+      const teamIds = Array.from(
+        new Set(
+          teamIdRows.flatMap((row: { home_team_id?: string; away_team_id?: string }) => {
+            const ids: string[] = [];
+            if (row.home_team_id) ids.push(row.home_team_id);
+            if (row.away_team_id) ids.push(row.away_team_id);
+            return ids;
+          }),
+        ),
+      );
+
+      competitionTeams = teamIds.length
+        ? await this.teamsRepository.find({
+            where: { id: In(teamIds) },
+            order: { name: 'ASC' },
+          })
+        : [];
+    }
 
     const response: Record<string, unknown> = {
       current_admin_first_name: currentAdmin?.first_name ?? '',
@@ -109,23 +142,33 @@ export class AdminService {
     };
 
     if (isGeneral) {
-      const [ticketsCount, supporterCardsCount, paidPayments] = await Promise.all([
+      const [ticketsCount, supporterCardsCount, paymentAgg] = await Promise.all([
         this.ticketsRepository.count(),
         this.supporterCardsRepository.count(),
-        this.paymentsRepository.find({
-          where: { status: PaymentStatus.SUCCESS },
-        }),
+        this.paymentsRepository
+          .createQueryBuilder('payment')
+          .select('COALESCE(SUM(payment.amount), 0)', 'sum')
+          .addSelect('COUNT(1)', 'count')
+          .where('payment.status = :status', { status: PaymentStatus.SUCCESS })
+          .getRawOne<{ sum?: string; count?: string }>(),
       ]);
 
-      const revenue = paidPayments.reduce((sum, payment) => {
-        return sum + Number(payment.amount ?? 0);
-      }, 0);
+      const revenue = Number(paymentAgg?.sum ?? 0);
+      const paymentsCount = Number(paymentAgg?.count ?? 0);
 
       response.tickets_sold = ticketsCount;
       response.supporter_cards_sold = supporterCardsCount;
       response.revenue_total = revenue;
-      response.payments_count = paidPayments.length;
+      response.payments_count = paymentsCount;
     }
+
+    if (!this.dashboardCache || this.dashboardCache.expiresAt <= now) {
+      this.dashboardCache = {
+        expiresAt: now + 60_000,
+        byRole: new Map<Role, Record<string, unknown>>(),
+      };
+    }
+    this.dashboardCache.byRole.set(actor.role, response);
 
     return response;
   }
